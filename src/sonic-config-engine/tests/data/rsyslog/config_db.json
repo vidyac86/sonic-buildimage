@@ -176,7 +176,7 @@
             "default_bgp_status": "down",
             "default_pfcwd_status": "enable",
             "deployment_id": "1",
-            "docker_routing_config_mode": "separated",
+            "docker_routing_config_mode": "unified",
             "hostname": "kvm-host",
             "hwsku": "Mellanox-SN2700",
             "mac": "98:03:9B:F6:02:80",

@@ -4,7 +4,7 @@
             "sonic-device_metadata:DEVICE_METADATA": {
                 "sonic-device_metadata:localhost": {
                     "bgp_asn": "65000",
-                    "docker_routing_config_mode": "separated",
+                    "docker_routing_config_mode": "unified",
                     "hostname": "DUT-ASW",
                     "platform": "Stone-DX010"
                 }
@@ -219,7 +219,7 @@
             "sonic-device_metadata:DEVICE_METADATA": {
                 "localhost": {
                     "bgp_asn": "64850",
-                    "docker_routing_config_mode": "separated",
+                    "docker_routing_config_mode": "unified",
                     "hostname": "asw.dc",
                     "hwsku": "Stone",
                     "mac": "00:11:22:33:44:55",
