@@ -104,10 +104,14 @@ class BGPPeerMgrBase(Manager):
             "delete":      self.fabric.from_string('no neighbor {{ neighbor_addr }}'),
             "shutdown":    self.fabric.from_string('neighbor {{ neighbor_addr }} shutdown'),
             "no shutdown": self.fabric.from_string('no neighbor {{ neighbor_addr }} shutdown'),
+            "no listen range": self.fabric.from_string('no bgp listen range {{ ip_range }} peer-group {{peer_group}}'),
         }
 
         if (os.path.exists(self.fabric.env.loader.searchpath[0] + "/" + base_template + "update.conf.j2")):
             self.templates["update"] = self.fabric.from_file(base_template + "update.conf.j2")
+        if os.path.exists(self.fabric.env.loader.searchpath[0] + "/" + base_template + "delete.conf.j2"):
+            self.templates["delete"] = self.fabric.from_file(base_template + "delete.conf.j2")
+            log_info("Using delete template found at %s" % (base_template + "delete.conf.j2"))
 
         deps = [
             ("CONFIG_DB", swsscommon.CFG_DEVICE_METADATA_TABLE_NAME, "localhost/bgp_asn"),
@@ -234,6 +238,7 @@ class BGPPeerMgrBase(Manager):
             self.update_state_db(vrf, nbr, data, "SET")
             log_info("Peer '(%s|%s)' has been scheduled to be added with attributes '%s'" % print_data)
 
+        self.directory.put(self.db_name, self.table_name, vrf + '|' + nbr, data)
         return True
 
     def update_state_db(self, vrf, nbr, data, op):
@@ -287,6 +292,7 @@ class BGPPeerMgrBase(Manager):
         else:
             log_err("Peer '(%s|%s)': Can't update the peer. Only 'admin_status' attribute is supported" % (vrf, nbr))
 
+        self.directory.put(self.db_name, self.table_name, vrf + '|' + nbr, data)
         return True
 
     def change_admin_status(self, vrf, nbr, data):
@@ -420,7 +426,35 @@ class BGPPeerMgrBase(Manager):
         if peer_key not in self.peers:
             log_warn("Peer '(%s|%s)' has not been found" % (vrf, nbr))
             return
-        cmd = self.templates["delete"].render(neighbor_addr=nbr)
+        # Starting with FRR 10.1, if a peer group is attached to a "listen range",
+        # the range must be removed before the peer group can be deleted.
+        # To comply with this requirement, we first run the command "no bgp listen range ..." to
+        # remove the "listen range" associated with the peer group, and only then proceed
+        # with deleting the peer group.
+        if self.peer_type == 'dynamic' or self.peer_type == 'sentinels':
+            ip_ranges = self.directory.get(self.db_name, self.table_name, vrf + '|' + nbr).get("ip_range")
+            if ip_ranges is not None:
+                ip_ranges = ip_ranges.split(',')
+                for ip_range in ip_ranges:
+                    log_debug("Deleting listen range for peer-group {}, ip_range {}".format(ip_range, nbr))
+                    cmd = self.templates["no listen range"].render(ip_range=ip_range, peer_group=nbr)
+                    ret_code = self.apply_op(cmd, vrf)
+                    if ret_code:
+                        log_info("Listen range '%s' for peer '(%s|%s)' has been disabled" % (ip_range, vrf, nbr))
+                    else:
+                        log_err("Listen range '%s' for peer '(%s|%s)' hasn't been disabled" % (ip_range, vrf, nbr))
+        
+        kwargs = {
+            'CONFIG_DB__DEVICE_METADATA': self.directory.get_slot("CONFIG_DB", swsscommon.CFG_DEVICE_METADATA_TABLE_NAME),
+            'neighbor_addr': nbr,
+            'vrf': vrf
+        }
+
+        try:
+            cmd = self.templates["delete"].render(**kwargs)
+        except jinja2.TemplateError as e:
+            log_err("Peer '(%s|%s)'. Error in rendering the template for 'DEL' command '%s'" % (vrf, nbr, str(e)))
+
         ret_code = self.apply_op(cmd, vrf)
         if ret_code:
             self.update_state_db(vrf, nbr, {}, "DEL")
@@ -428,6 +462,7 @@ class BGPPeerMgrBase(Manager):
             self.peers.remove(peer_key)
         else:
             log_err("Peer '(%s|%s)' hasn't been removed" % (vrf, nbr))
+        self.directory.remove(self.db_name, self.table_name, vrf + '|' + nbr)
 
     def apply_op(self, cmd, vrf):
         """

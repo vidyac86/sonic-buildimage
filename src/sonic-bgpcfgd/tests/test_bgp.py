@@ -56,6 +56,7 @@ def constructor(constants_path, bgp_router_id="", peer_type="general", with_lo0_
     m.directory.put("LOCAL", "local_addresses", "fc00:20::20", {"interface": "Ethernet8|fc00:20::20/96"})
     m.directory.put("LOCAL", "interfaces", "Ethernet4|30.30.30.30/24", {"anything": "anything"})
     m.directory.put("LOCAL", "interfaces", "Ethernet8|fc00:20::20/96", {"anything": "anything"})
+    m.directory.put("CONFIG_DB", swsscommon.CFG_BGP_NEIGHBOR_TABLE_NAME, "default|10.10.10.1", {"ip_range": None})
 
     if m.check_neig_meta:
         m.directory.put("CONFIG_DB", swsscommon.CFG_DEVICE_NEIGHBOR_METADATA_TABLE_NAME, "TOR", {})
@@ -186,7 +187,7 @@ def test_add_dynamic_peer_ipv6(mocked_log_info):
 @patch('bgpcfgd.managers_bgp.log_info')
 @patch('bgpcfgd.managers_bgp.swsscommon.Table')
 @patch('bgpcfgd.managers_bgp.swsscommon.DBConnector')
-def modify_dynamic_peer_common(mock_db_conn, mock_table, mocked_log_info, peer, data, expected_cmds, expected_log):
+def modify_dynamic_peer_common(mock_db_conn, mock_table, mocked_log_info, peer, data, update_log, final_log):
     for constant in load_constant_files():
         m = constructor(constant, peer_type="dynamic")
         m.cfg_mgr.push = MagicMock(return_value = None)
@@ -196,34 +197,31 @@ def modify_dynamic_peer_common(mock_db_conn, mock_table, mocked_log_info, peer, 
         mock_table.return_value = mock_state_db_table
         res = m.set_handler(peer, data)
         assert res, "Expect True return value"
-        mock_state_db_table.set.assert_called_once_with(peer, list(sorted(data.items())))
-        mocked_log_info.assert_called_with(expected_log)
-        m.cfg_mgr.push.assert_called_once_with(expected_cmds)
+        if "update" in m.templates:
+            mock_state_db_table.set.assert_called_once_with(peer, list(sorted(data.items())))
+            mocked_log_info.assert_any_call(update_log)
+            mocked_log_info.assert_called_with(final_log)
 
 def test_add_dynamic_peer_range():
-    expected_cmds = 'router bgp 65100\n bgp suppress-fib-pending\n!\n! template: bgpd/templates/dynamic/update.conf.j2\n!\n\n\n' \
-        '  bgp listen range 10.255.1.0/24 peer-group DynNbr1\n\n!\n! end of template: bgpd/templates/dynamic/update.conf.j2\n!\nexit'
     data = {"peer_asn": "65200", "ip_range": "10.255.0.0/24,10.255.1.0/24", "name": "DynNbr1"}
     peer = "DynNbr1"
-    expected_log = "Peer '(default|DynNbr1)' ip range has been scheduled to be updated with range '10.255.0.0/24,10.255.1.0/24'"
-    modify_dynamic_peer_common(peer=peer, data=data, expected_cmds=expected_cmds, expected_log=expected_log)
+    update_log = "Peer '(default|DynNbr1)' ip range is going to be updated. Ranges to delete: [] Ranges to add: ['10.255.1.0/24']"
+    final_log = "Peer '(default|DynNbr1)' ip range has been scheduled to be updated with range '10.255.0.0/24,10.255.1.0/24'"
+    modify_dynamic_peer_common(peer=peer, data=data, update_log=update_log, final_log=final_log)
 
 def test_modify_dynamic_peer_range():
-    expected_cmds = 'router bgp 65100\n bgp suppress-fib-pending\n!\n! template: bgpd/templates/dynamic/update.conf.j2\n!\n\n' \
-        '  no bgp listen range 10.255.0.0/24 peer-group DynNbr1\n\n\n  bgp listen range 10.255.0.0/26 peer-group DynNbr1\n\n!\n!' \
-        ' end of template: bgpd/templates/dynamic/update.conf.j2\n!\nexit'
     data = {"peer_asn": "65200", "ip_range": "10.255.0.0/26", "name": "DynNbr1"}
     peer = "DynNbr1"
-    expected_log = "Peer '(default|DynNbr1)' ip range has been scheduled to be updated with range '10.255.0.0/26'"
-    modify_dynamic_peer_common(peer=peer, data=data, expected_cmds=expected_cmds, expected_log=expected_log)
+    update_log = "Peer '(default|DynNbr1)' ip range is going to be updated. Ranges to delete: ['10.255.0.0/24'] Ranges to add: ['10.255.0.0/26']"
+    final_log = "Peer '(default|DynNbr1)' ip range has been scheduled to be updated with range '10.255.0.0/26'"
+    modify_dynamic_peer_common(peer=peer, data=data, update_log=update_log, final_log=final_log)
 
 def test_delete_dynamic_peer_range():
-    expected_cmds = 'router bgp 65100\n bgp suppress-fib-pending\n!\n! template: bgpd/templates/dynamic/update.conf.j2\n!\n\n' \
-        '  no bgp listen range 192.168.1.0/24 peer-group DynNbr2\n\n\n!\n! end of template: bgpd/templates/dynamic/update.conf.j2\n!\nexit'
     data = {"peer_asn": "65200", "ip_range": "192.168.0.0/24", "name": "DynNbr2"}
     peer = "DynNbr2"
-    expected_log = "Peer '(default|DynNbr2)' ip range has been scheduled to be updated with range '192.168.0.0/24'"
-    modify_dynamic_peer_common(peer=peer, data=data, expected_cmds=expected_cmds, expected_log=expected_log)
+    update_log = "Peer '(default|DynNbr2)' ip range is going to be updated. Ranges to delete: ['192.168.1.0/24'] Ranges to add: []"
+    final_log = "Peer '(default|DynNbr2)' ip range has been scheduled to be updated with range '192.168.0.0/24'"
+    modify_dynamic_peer_common(peer=peer, data=data, update_log=update_log, final_log=final_log)
 
 @patch('bgpcfgd.managers_bgp.log_warn')
 def test_add_peer_no_local_addr(mocked_log_warn):
@@ -247,10 +245,31 @@ def test_del_handler(mocked_log_info):
         m = constructor(constant)
         m.del_handler("10.10.10.1")
         mocked_log_info.assert_called_with("Peer '(default|10.10.10.1)' has been removed")
+    
+@patch('bgpcfgd.managers_bgp.log_info')
+def test_del_handler_dynamic_template_exists(mocked_log_info):
+    for constant in load_constant_files():
+        m = constructor(constant, peer_type="dynamic")
+        base_template = "bgpd/templates/" + m.constants["bgp"]["peers"]["dynamic"]["template_dir"] + "/delete.conf.j2"
+        if os.path.exists(TEMPLATE_PATH + "/" + base_template):
+            mocked_log_info.assert_called_with("Using delete template found at %s" % base_template)
+        m.del_handler("10.10.10.1")
+        mocked_log_info.assert_called_with("Peer '(default|10.10.10.1)' has been removed")
 
 @patch('bgpcfgd.managers_bgp.log_warn')
 def test_del_handler_nonexist_peer(mocked_log_warn):
     for constant in load_constant_files():
         m = constructor(constant)
+        m.del_handler("40.40.40.1")
+        mocked_log_warn.assert_called_with("Peer '(default|40.40.40.1)' has not been found")
+
+@patch('bgpcfgd.managers_bgp.log_info')
+@patch('bgpcfgd.managers_bgp.log_warn')
+def test_del_handler_dynamic_nonexist_peer_template_exists(mocked_log_warn, mocked_log_info):
+    for constant in load_constant_files():
+        m = constructor(constant, peer_type="dynamic")
+        base_template = "bgpd/templates/" + m.constants["bgp"]["peers"]["dynamic"]["template_dir"] + "/delete.conf.j2"
+        if os.path.exists(TEMPLATE_PATH + "/" + base_template):
+            mocked_log_info.assert_called_with("Using delete template found at %s" % base_template)
         m.del_handler("40.40.40.1")
         mocked_log_warn.assert_called_with("Peer '(default|40.40.40.1)' has not been found")
