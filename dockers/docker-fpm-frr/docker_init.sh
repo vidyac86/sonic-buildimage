@@ -64,7 +64,7 @@ elif [ "$CONFIG_TYPE" == "split-unified" ]; then
     echo "service integrated-vtysh-config" > /etc/frr/vtysh.conf
     rm -f /etc/frr/bgpd.conf /etc/frr/zebra.conf /etc/frr/staticd.conf
     write_default_zebra_config /etc/frr/frr.conf
-elif [ -z "$CONFIG_TYPE" ] || [ "$CONFIG_TYPE" == "unified" ]; then
+elif [ -z "$CONFIG_TYPE" ] || [ "$CONFIG_TYPE" == "unified" ] || [ "$CONFIG_TYPE" == "separated" ]; then
     MGMT_FRAMEWORK_CONFIG=$(echo $FRR_VARS | jq -r '.frr_mgmt_framework_config')
     if [ -n "$MGMT_FRAMEWORK_CONFIG" ] && [ "$MGMT_FRAMEWORK_CONFIG" != "false" ]; then
         CFGGEN_PARAMS=" \
