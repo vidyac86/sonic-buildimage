@@ -105,6 +105,7 @@ command=/usr/lib/frr/bgpd -A 127.0.0.1 -P 0 -M snmp -M bmp
 {% else %}
 command=/usr/lib/frr/bgpd -A 127.0.0.1 -P 0 -M snmp
 {% endif %}
+{% endif %}
 priority=5
 stopsignal=KILL
 autostart=false
