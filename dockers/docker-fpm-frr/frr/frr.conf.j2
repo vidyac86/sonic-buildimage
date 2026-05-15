@@ -40,5 +40,6 @@ agentx
 {% if DEVICE_METADATA['localhost']['type'] == "SpineChassisFrontendRouter" %}
 {% include "bgpd/bgpd.spine_chassis_frontend_router.conf.j2" %}
 {% endif %}
-{% include "bgpd/bgpd.main.conf.j2" %}
+{% include "bgpd/bgpd.conf.j2" %}
+{% include "sharpd/sharpd.conf.j2" %}
 !
