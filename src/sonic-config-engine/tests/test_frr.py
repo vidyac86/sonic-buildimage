@@ -65,6 +65,9 @@ class TestCfgGen(TestCase):
     def test_config_frr(self):
         self.assertTrue(*self.run_case('frr.conf.j2', 'frr.conf'))
 
+    def test_config_frr_unified(self):
+        self.assertTrue(*self.run_case('frr_unified.conf.j2', 'frr_unified.conf'))
+
     def test_bgpd_frr(self):
         self.assertTrue(*self.run_case('bgpd/bgpd.conf.j2', 'bgpd_frr.conf'))
 

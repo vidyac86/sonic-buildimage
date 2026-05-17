@@ -1,8 +1,7 @@
-{# Note: This template replaces the old frr.conf.j2 which included specific sub-components directly.
-     The new approach includes the main daemon config files (zebra.conf.j2, staticd.conf.j2, bgpd.conf.j2)
-     which in turn include the same sub-components. This provides equivalent configuration with
-     better modularity. Each daemon config includes common/daemons.common.conf.j2, which is safe
-     as it contains daemon-agnostic configuration. #}
+{# This template generates the unified frr.conf for unified/separated routing config modes.
+     For non-mgmt-framework devices it delegates to frr_unified.conf.j2, which includes only
+     the required sub-components (zebra interfaces, staticd routes, bgpd main config) with a
+     single shared header, avoiding duplicate hostname/log directives that break vtysh -b. #}
 {% if DEVICE_METADATA.localhost.frr_mgmt_framework_config is defined and DEVICE_METADATA.localhost.frr_mgmt_framework_config == "true" %}
     {% include "/usr/local/sonic/frrcfgd/frr.conf.j2" %}
 {% else %}
